@@ -1,19 +1,25 @@
+local Path = require('plenary.path')
+
 local dirname = function(p)
   return vim.fn.fnamemodify(p, ":h")
 end
 
 local function get_trace(element, level, msg)
+
   local function trimTrace(info)
-    local index = info.traceback:find('\n%s*%[C]')
-    info.traceback = info.traceback:sub(1, index)
+    local start_index = info.traceback:find('/')
+    local end_index = info.traceback:find(': in')
+    info.traceback = info.traceback:sub(start_index, end_index)
+
     return info
   end
+
   level = level or  3
 
-  local thisdir = dirname(debug.getinfo(1, 'Sl').source, ":h")
+  local thisdir = dirname(debug.getinfo(1, 'Sl').source)
   local info = debug.getinfo(level, 'Sl')
   while info.what == 'C' or info.short_src:match('luassert[/\\].*%.lua$') or
-        (info.source:sub(1,1) == '@' and thisdir == dirname(info.source)) do
+    (info.source:sub(1,1) == '@' and thisdir == dirname(info.source)) do
     level = level + 1
     info = debug.getinfo(level, 'Sl')
   end
@@ -22,12 +28,44 @@ local function get_trace(element, level, msg)
   info.message = msg
 
   -- local file = busted.getFile(element)
-  local file = false
-  return file and file.getTrace(file.name, info) or trimTrace(info)
+  -- local file = false
+  -- local file = false
+  -- return file and file.getTrace(file.name, info) or trimTrace(info)
+  return trimTrace(info)
 end
 
+local function get_file_and_line_number()
 
+  local function trimTrace(trace)
+    local start_index = trace:find('/')
+    local end_index = trace:find(': in')
+    trace = trace:sub(start_index, end_index)
 
+    local split_str = vim.split(trace, ':')
+    local spec = {}
+    spec.file = split_str[1]
+    spec.linenumber = split_str[2]
+
+    return spec
+  end
+
+  local level = 3
+
+  local thisdir = dirname(debug.getinfo(1, 'Sl').source)
+  local info = debug.getinfo(level, 'Sl')
+  while info.what == 'C' or info.short_src:match('luassert[/\\].*%.lua$') or
+    (info.source:sub(1,1) == '@' and thisdir == dirname(info.source)) do
+    level = level + 1
+    info = debug.getinfo(level, 'Sl')
+  end
+
+  local trace = debug.traceback('', level)
+
+  return trimTrace(trace)
+end
+
+--[[ is_headless is always true
+-- running in nvim or in terminal --]]
 local is_headless = require('plenary.nvim_meta').is_headless
 
 local print = function(...)
@@ -70,10 +108,9 @@ local call_inner = function(desc, func)
   local desc_stack = add_description(desc)
   add_new_each()
   local ok, msg = xpcall(func, function(msg)
-    -- debug.traceback
-    -- return vim.inspect(get_trace(nil, 3, msg))
     local trace = get_trace(nil, 3, msg)
-    return trace.message .. "\n" .. trace.traceback
+    -- return trace.message .. "\n" .. trace.traceback
+    return trace.message
   end)
   clear_last_each()
   pop_description()
@@ -81,7 +118,9 @@ local call_inner = function(desc, func)
   return ok, msg, desc_stack
 end
 
-local color_table = {
+local ansi_color_table = {
+  cyan = 36,
+  magenta = 35,
   yellow = 33,
   green = 32,
   red = 31,
@@ -89,42 +128,49 @@ local color_table = {
 
 local color_string = function(color, str)
   if not is_headless then
+    -- This is never being called
     return str
   end
 
   return string.format("%s[%sm%s%s[%sm",
-    string.char(27),
-    color_table[color] or 0,
-    str,
-    string.char(27),
-    0
+  string.char(27),
+  ansi_color_table[color] or 0,
+  str,
+  string.char(27),
+  0
   )
 end
 
+local bold_string = function(str)
+  local ansi_bold = "\027[1m"
+  local ansi_clear = "\027[0m"
+
+  return ansi_bold .. str .. ansi_clear
+end
+
+-- local SUCCESS = color_string("green", "Success")
+local FAIL = color_string("red", "Failure")
 local SUCCESS = color_string("green", "Success")
-local FAIL = color_string("red", "Fail")
 local PENDING = color_string("yellow", "Pending")
 
-local HEADER = string.rep("=", 40)
+local HORIZONTALRULER = string.rep("─", 80)
 
-mod.format_results = function(res)
-  local num_pass = #res.pass
-  local num_fail = #res.fail
-  local num_errs = #res.errs
+mod.format_results = function(result)
 
-  print("")
-  print(color_string("green", "Success: "), num_pass)
-  print(color_string("red", "Failed : "), num_fail)
-  print(color_string("red", "Errors : "), num_errs)
-  print(HEADER)
+  local num_pass = color_string("green", #result.pass)
+  local num_fail = color_string("red", #result.fail)
+  local num_errs = color_string("magenta", #result.errs)
+
+  print(string.format(" %s successes /  %s failures / %s errors", num_pass, num_fail, num_errs))
 end
 
 mod.describe = function(desc, func)
-  results.pass  = results.pass or {}
-  results.fail  = results.fail or {}
-  results.errs  = results.errs or {}
-  results.fatal = results.fatal or {}
+  results.pass = {}
+  results.fail = {}
+  results.errs = {}
 
+  print("\n" .. HORIZONTALRULER .."\n ")
+  -- print("Testing: ", debug.getinfo(2, 'Sl').source)
   describe = mod.inner_describe
   local ok, msg = call_inner(desc, func)
   describe = mod.describe
@@ -185,17 +231,27 @@ mod.it = function(desc, func)
 
   -- TODO: We should figure out how to determine whether
   -- and assert failed or whether it was an error...
-
   local to_insert, printed
   if not ok then
     to_insert = results.fail
     test_result.msg = msg
 
-    print(FAIL, "||", table.concat(test_result.descriptions, " "))
-    print(indent(msg, 12))
+    --     print(FAIL, " → " .. color_string("cyan", "spec/foo/bar_spec.lua @ 7") .. "\n")
+
+    print("{SPEC: FAIL}")
+    local spec = get_file_and_line_number()
+
+    print(FAIL, " → " .. color_string("cyan", spec.file) .. " @ " .. color_string("cyan", spec.linenumber) .. "\n")
+
+    print(bold_string(table.concat(test_result.descriptions)))
+    print(indent("\n" .. msg, 7))
+
+    print("{ENDOFSPEC}")
+
   else
-    to_insert = results.pass
-    print(SUCCESS, "||", table.concat(test_result.descriptions, " "))
+    print("{SPEC: SUCCESS}")
+    print(SUCCESS, " → ", table.concat(test_result.descriptions, " "))
+    print("{ENDOFSPEC}")
   end
 
   table.insert(to_insert, test_result)
@@ -219,16 +275,17 @@ clear = mod.clear
 assert = require("luassert")
 
 mod.run = function(file)
-  print("\n" .. HEADER)
-  print("Testing: ", file)
+  -- print("Testing: ", file)
 
   local ok, msg = pcall(dofile, file)
 
   if not ok then
-    print(HEADER)
+    print(HORIZONTALRULER)
     print("FAILED TO LOAD FILE")
     print(color_string("red", msg))
-    print(HEADER)
+    print(HORIZONTALRULER)
+
+    os.exit(2)
     if is_headless then
       os.exit(2)
     else

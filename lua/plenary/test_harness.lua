@@ -9,13 +9,23 @@ local headless = require("plenary.nvim_meta").is_headless
 
 local harness = {}
 
-local print_output = vim.schedule_wrap(function(_, ...)
-  for _, v in ipairs({...}) do
-    io.stdout:write(tostring(v))
-    io.stdout:write("\n")
-  end
+-- local tty_output = vim.schedule_wrap(function(_, ...)
+--   for _, v in ipairs({...}) do
+--     io.stdout:write(tostring(v))
+--     io.stdout:write("\n")
+--   end
 
-  vim.cmd [[mode]]
+--   vim.cmd [[mode]]
+-- end)
+
+local test_res = {}
+
+local tty_output = vim.schedule_wrap(function(_, ...)
+
+   local read = require('plenary.busted_reader')
+   test_res = read.output_to_table(...)
+
+   vim.cmd [[mode]]
 end)
 
 local nvim_output = vim.schedule_wrap(function(bufnr, ...)
@@ -24,6 +34,10 @@ local nvim_output = vim.schedule_wrap(function(bufnr, ...)
   end
 
   for _, v in ipairs({...}) do
+
+    local skip = v:find('{SPEC:') or v:find('{ENDOFSPEC}')
+    if skip then return end
+
     vim.api.nvim_buf_set_lines(bufnr, -1, -1, false, {v})
   end
 end)
@@ -38,7 +52,7 @@ function harness.test_directory_command(command)
 end
 
 function harness.test_directory(directory, opts)
-  print("Starting...")
+  print("Start Busting...\n")
   opts = vim.tbl_deep_extend('force', {winopts = {winblend = 3}}, opts or {})
 
   local res = {}
@@ -58,11 +72,13 @@ function harness.test_directory(directory, opts)
     vim.cmd('mode')
   end
 
-  local outputter = headless and print_output or nvim_output
+  local outputter = headless and tty_output or nvim_output
 
   local paths = harness._find_files_to_run(directory)
   for _, p in ipairs(paths) do
-    outputter(res.bufnr, "Scheduling: " .. p.filename)
+    local headless_ctx = headless and 'Scheduling: ' or 'Current: '
+    local rel_path = Path.make_relative(p)
+    outputter(res.bufnr, headless_ctx .. rel_path)
   end
 
   local path_len = #paths
@@ -100,10 +116,10 @@ function harness.test_directory(directory, opts)
         end,
 
         on_exit = vim.schedule_wrap(function(j_self, _, _)
-          if path_len ~= 1 then
-            outputter(res.bufnr, unpack(j_self:stderr_result()))
-            outputter(res.bufnr, unpack(j_self:result()))
-          end
+           if path_len ~= 1 then
+              outputter(res.bufnr, unpack(j_self:stderr_result()))
+              outputter(res.bufnr, unpack(j_self:result()))
+           end
 
           vim.cmd('mode')
         end)
@@ -129,6 +145,15 @@ function harness.test_directory(directory, opts)
   table.remove(jobs, table.getn(jobs))
   vim.wait(100)
   log.debug("Done...")
+
+  local dots = require('plenary.busted_dots')
+  dots.draw(test_res)
+
+  for _, spec in pairs(test_res) do
+     -- io.stdout:write(tostring(res.status), " \n")
+     io.stdout:write(spec.content, " \n")
+     -- print("res table" .. tostring(res))
+  end
 
   if headless then
     if f.any(function(_, v) return v.code ~= 0 end, jobs) then

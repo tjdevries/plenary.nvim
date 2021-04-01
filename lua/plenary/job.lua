@@ -76,6 +76,7 @@ end
 ---@field on_exit function        : (self, code: number, signal: number)
 ---@field maximum_results number  : stop processing results after this number
 ---@field writer Job|table|string : Job that writes to stdin of this job.
+
 function Job:new(o)
   if not o then
     error(debug.traceback("Options are required for Job:new"))
