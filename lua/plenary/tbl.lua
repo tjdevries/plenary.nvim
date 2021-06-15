@@ -37,4 +37,12 @@ function tbl.freeze(t)
   })
 end
 
+function tbl.copy_one_level(t)
+  local res = {}
+  for k, v in pairs(t) do
+    res[k] = v
+  end
+  return res
+end
+
 return tbl

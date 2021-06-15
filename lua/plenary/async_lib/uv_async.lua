@@ -13,7 +13,7 @@ local function add(name, argc)
   M[name] = ret
 end
 
-add('close', 4) -- close a handle
+add('close', 2) -- close a handle
 
 -- filesystem operations
 add('fs_open', 4)

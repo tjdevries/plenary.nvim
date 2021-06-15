@@ -2,6 +2,7 @@ local vim = vim
 local uv = vim.loop
 
 local F = require('plenary.functional')
+local shared = require('plenary.job.shared')
 
 local Job = {}
 Job.__index = Job
@@ -46,15 +47,6 @@ local shutdown_factory = function (child, options)
   end
 end
 
-local function expand(path)
-  if vim.in_fast_event() then
-    return assert(uv.fs_realpath(path), string.format("Path must be valid: %s", path))
-  else
-    -- TODO: Probably want to check that this is valid here... otherwise that's weird.
-    return vim.fn.expand(path, true)
-  end
-end
-
 ---@class Array
 --- Numeric table
 
@@ -82,23 +74,7 @@ function Job:new(o)
     error(debug.traceback("Options are required for Job:new"))
   end
 
-  local command = o.command
-  if not command then
-    if o[1] then
-      command = o[1]
-    else
-      error(debug.traceback("'command' is required for Job:new"))
-    end
-  elseif o[1] then
-    error(debug.traceback("Cannot pass both 'command' and array args"))
-  end
-
-  local args = o.args
-  if not args then
-    if #o > 1 then
-      args = {select(2, unpack(o))}
-    end
-  end
+  local command, args = shared.get_command_and_args(o)
 
   local ok, is_exe = pcall(vim.fn.executable, command)
   if not o.skip_validation and ok and 1 ~= is_exe then
@@ -258,15 +234,15 @@ function Job:_shutdown(code, signal)
   self._stderr_reader = nil
 end
 
-function Job:_create_uv_options()
+function shared._create_uv_options(job)
   local options = {}
 
-  options.command = self.command
-  options.args = self.args
-  options.stdio = { self.stdin, self.stdout, self.stderr }
+  options.command = job.command
+  options.args = job.args
+  options.stdio = { job.stdin, job.stdout, job.stderr }
 
-  if self._raw_cwd then options.cwd = expand(self._raw_cwd) end
-  if self.env then options.env = self.env end
+  if job._raw_cwd then options.cwd = shared.expand(job._raw_cwd) end
+  if job.env then options.env = job.env end
 
   return options
 end
@@ -364,26 +340,14 @@ end
 function Job:_prepare_pipes()
   self:_stop()
 
-  if self.writer then
-    if Job.is_job(self.writer) then
-      self.writer:_prepare_pipes()
-      self.stdin = self.writer.stdout
-    elseif self.writer.write then
-      self.stdin = self.writer
-    end
-  end
-
-  if not self.stdin then
-    self.stdin = self.interactive and uv.new_pipe(false) or nil
-  end
-
+  self.stdin = shared.get_stdin(self.writer, self.is_job(self.writer), self.interactive)
   self.stdout = uv.new_pipe(false)
   self.stderr = uv.new_pipe(false)
 end
 
 --- Execute job. Should be called only after preprocessing is done.
 function Job:_execute()
-  local options = self:_create_uv_options()
+  local options = shared.create_uv_options(self)
 
   if self._user_on_start then
     self:_user_on_start()

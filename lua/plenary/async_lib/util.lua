@@ -1,7 +1,6 @@
 local a = require('plenary.async_lib.async')
 local await = a.await
 local async = a.async
-local co = coroutine
 local Deque = require('plenary.async_lib.structs').Deque
 local uv = vim.loop
 
@@ -317,7 +316,7 @@ M.block_on = function(future, timeout)
   end
 
   if not vim.wait(timeout or 2000, check, 20, false) then
-    error("Blocking on future timed out or was interrupted")
+    error(debug.traceback("Blocking on future timed out or was interrupted" .. tostring(future)))
   end
 
   return unpack(ret)
