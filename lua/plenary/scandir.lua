@@ -81,7 +81,7 @@ local process_item = function(opts, name, typ, current_dir, next_dir, bp, data, 
       else
         table.insert(next_dir, entry)
       end
-      if opts.add_dirs then
+      if opts.add_dirs or opts.only_dirs then
         if not giti or interpret_gitignore(giti, bp, entry .. "/") then
           if not msp or msp(entry) then
             table.insert(data, entry)
@@ -89,7 +89,7 @@ local process_item = function(opts, name, typ, current_dir, next_dir, bp, data, 
           end
         end
       end
-    else
+    elseif not opts.only_dirs then
       local entry = current_dir .. os_sep .. name
       if not giti or interpret_gitignore(giti, bp, entry) then
         if not msp or msp(entry) then
@@ -109,6 +109,7 @@ end
 -- @param opts: table to change behavior
 --   opts.hidden (bool):              if true hidden files will be added
 --   opts.add_dirs (bool):            if true dirs will also be added to the results
+--   opts.only_dirs (bool):           if true only dirs will be added to the results
 --   opts.respect_gitignore (bool):   if true will only add files that are not ignored by the git (uses each gitignore found in path table)
 --   opts.depth (int):                depth on how deep the search should go
 --   opts.search_pattern (regex):     regex for which files will be added, string, table of strings, or callback (should return bool)
