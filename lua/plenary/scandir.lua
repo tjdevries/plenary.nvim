@@ -6,39 +6,56 @@ local uv = vim.loop
 
 local m = {}
 
-local get_gitignore = function(basepath)
-  local gitignore = {}
+local make_gitignore = function(basepath)
+  local patterns = {}
   local valid = false
   for _, v in ipairs(basepath) do
     local p = Path:new(v .. os_sep .. '.gitignore')
     if p:exists() then
       valid = true
-      gitignore[v] = {}
+      patterns[v] = {ignored = {}, negated = {}}
       for l in p:iter() do
-        if l ~= '' then
-          local el = l:gsub('%#.*', '')
+        local prefix = l:sub(1, 1)
+        local negated = prefix == '!'
+        if negated then
+            l = l:sub(2)
+            prefix = l:sub(1, 1)
+        end
+        if prefix == '/' then
+            l = v .. l
+        end
+        if not (prefix == '' or prefix == '#') then
+          local el = vim.trim(l)
+          el = el:gsub('%-', '%%-')
           el = el:gsub('%.', '%%.')
-          el = el:gsub('%*', '%.%*')
+          el = el:gsub('/%*%*/', '/%%w+/')
+          el = el:gsub('%*%*', '')
+          el = el:gsub('%*', '%%w+')
+          el = el:gsub('%?', '%%w')
           if el ~= '' then
-            table.insert(gitignore[v], el)
+            table.insert(negated and patterns[v].negated or patterns[v].ignored, el)
           end
         end
       end
     end
   end
   if not valid then return nil end
-  return gitignore
-end
-
-local interpret_gitignore = function(gitignore, bp, entry)
-  for _, v in ipairs(bp) do
-    if entry:find(v, 1, true) then
-      for _, w in ipairs(gitignore[v]) do
-        if entry:match(w) then return false end
+  return function(bp, entry)
+    for _, v in ipairs(bp) do
+      if entry:find(v, 1, true) then
+        local negated = false
+        for _, w in ipairs(patterns[v].ignored) do
+          if not negated and entry:match(w) then
+            for _, inverse in ipairs(patterns[v].negated) do
+              if not negated and entry:match(inverse) then negated = true end
+            end
+            if not negated then return false end
+          end
+        end
       end
     end
+    return true
   end
-  return true
 end
 
 local handle_depth = function(base_paths, entry, depth)
@@ -82,7 +99,7 @@ local process_item = function(opts, name, typ, current_dir, next_dir, bp, data, 
         table.insert(next_dir, entry)
       end
       if opts.add_dirs or opts.only_dirs then
-        if not giti or interpret_gitignore(giti, bp, entry .. "/") then
+        if not giti or giti(bp, entry .. "/") then
           if not msp or msp(entry) then
             table.insert(data, entry)
             if opts.on_insert then opts.on_insert(entry, typ) end
@@ -91,7 +108,7 @@ local process_item = function(opts, name, typ, current_dir, next_dir, bp, data, 
       end
     elseif not opts.only_dirs then
       local entry = current_dir .. os_sep .. name
-      if not giti or interpret_gitignore(giti, bp, entry) then
+      if not giti or giti(bp, entry) then
         if not msp or msp(entry) then
           table.insert(data, entry)
           if opts.on_insert then opts.on_insert(entry, typ) end
@@ -123,7 +140,7 @@ m.scan_dir = function(path, opts)
   local base_paths = vim.tbl_flatten { path }
   local next_dir = vim.tbl_flatten { path }
 
-  local gitignore = opts.respect_gitignore and get_gitignore(base_paths) or nil
+  local gitignore = opts.respect_gitignore and make_gitignore(base_paths) or nil
   local match_search_pat = opts.search_pattern and gen_search_pat(opts.search_pattern) or nil
 
   for i = table.getn(base_paths), 1, -1 do
@@ -173,7 +190,7 @@ m.scan_dir_async = function(path, opts)
   local current_dir = table.remove(next_dir, 1)
 
   -- TODO(conni2461): get gitignore is not async
-  local gitignore = opts.respect_gitignore and get_gitignore(base_paths) or nil
+  local gitignore = opts.respect_gitignore and make_gitignore(base_paths) or nil
   local match_search_pat = opts.search_pattern and gen_search_pat(opts.search_pattern) or nil
 
   -- TODO(conni2461): is not async. Shouldn't be that big of a problem but still
