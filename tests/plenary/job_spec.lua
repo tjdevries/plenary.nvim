@@ -91,6 +91,42 @@ describe('Job', function()
       assert.are.same(job:result(), {'hello', 'world'})
       assert.are.same(job:result(), results)
     end)
+
+    it('should return last line when there is ending newline', function()
+      local results = {}
+      local job = Job:new {
+        command = 'echo',
+
+        args = { "-e", "test1\ntest2" },
+
+        on_stdout = function(_, data)
+          table.insert(results, data)
+        end,
+      }
+
+      job:sync()
+
+      assert.are.same(job:result(), {'test1', 'test2'})
+      assert.are.same(job:result(), results)
+    end)
+
+    it('should return last line when there is no ending newline', function()
+      local results = {}
+      local job = Job:new {
+        command = 'echo',
+
+        args = { "-en", "test1\ntest2" },
+
+        on_stdout = function(_, data)
+          table.insert(results, data)
+        end,
+      }
+
+      job:sync()
+
+      assert.are.same(job:result(), {'test1', 'test2'})
+      assert.are.same(job:result(), results)
+    end)
   end)
 
   describe('env', function()
