@@ -1,19 +1,18 @@
-require('plenary.async_lib').tests.add_to_env()
-local Condvar = a.util.Condvar
+require('plenary.async').tests.add_to_env()
+local Condvar = a.control.Condvar
 local eq = assert.are.same
+local join, run_all = a.util.join, a.util.run_all
 
-a.describe('condvar', function()
+describe('condvar', function()
   a.it('should allow blocking', function()
     local var = false
 
     local condvar = Condvar.new()
 
-    local blocking = async(function()
-      await(condvar:wait())
+    a.run(function()
+      condvar:wait()
       var = true
     end)
-
-    a.run(blocking())
 
     eq(var, false)
 
@@ -27,22 +26,24 @@ a.describe('condvar', function()
 
     local condvar = Condvar.new()
 
-    local first = async(function()
-      await(condvar:wait())
+    local first = function()
+      condvar:wait()
       counter = counter + 1
-    end)
+    end
 
-    local second = async(function()
-      await(condvar:wait())
+    local second = function()
+      condvar:wait()
       counter = counter + 1
-    end)
+    end
 
-    local third = async(function()
-      await(condvar:wait())
+    local third = function()
+      condvar:wait()
       counter = counter + 1
-    end)
+    end
 
-    a.run_all { first(), second(), third() }
+    a.run(function()
+      join { first, second, third }
+    end)
 
     eq(0, counter)
 
@@ -64,22 +65,22 @@ a.describe('condvar', function()
 
     local condvar = Condvar.new()
 
-    local first = async(function()
-      await(condvar:wait())
+    local first = function()
+      condvar:wait()
       counter = counter + 1
-    end)
+    end
 
-    local second = async(function()
-      await(condvar:wait())
+    local second = function()
+      condvar:wait()
       counter = counter + 1
-    end)
+    end
 
-    local third = async(function()
-      await(condvar:wait())
+    local third = function()
+      condvar:wait()
       counter = counter + 1
-    end)
+    end
 
-    a.run_all { first(), second(), third() }
+    run_all { first, second, third }
 
     eq(0, counter)
 
@@ -101,22 +102,22 @@ a.describe('condvar', function()
 
     local condvar = Condvar.new()
 
-    local first = async(function()
-      await(condvar:wait())
+    local first = function()
+      condvar:wait()
       counter = counter + 1
-    end)
+    end
 
-    local second = async(function()
-      await(condvar:wait())
+    local second = function()
+      condvar:wait()
       counter = counter + 1
-    end)
+    end
 
-    local third = async(function()
-      await(condvar:wait())
+    local third = function()
+      condvar:wait()
       counter = counter + 1
-    end)
+    end
 
-    a.run_all { first(), second(), third() }
+    run_all { first, second, third }
 
     eq(0, counter)
 

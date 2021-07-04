@@ -1,4 +1,4 @@
-local Deque = require('plenary.async_lib.structs').Deque
+local Deque = require('plenary.async.structs').Deque
 local eq = assert.are.same
 
 -- just a helper to create the test deque

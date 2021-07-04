@@ -193,6 +193,28 @@ And some other funcs are here to deal with common problems.
 * `strings.align_str`
 * `strings.dedent`
 
+### plenary.profile
+
+Thin wrapper around LuaJIT's [`jit.p` profiler](https://blast.hk/moonloader/luajit/ext_profiler.html).
+
+```lua
+require'plenary.profile'.start("profile.log")
+
+-- code to be profiled
+
+require'plenary.profile'.stop()
+```
+
+You can use `start("profile.log", {flame = true})` to output the log in a
+flamegraph-compatible format. A flamegraph can be created from this using
+https://github.com/jonhoo/inferno via
+```
+inferno-flamegraph profile.log > flame.svg
+```
+The resulting interactive SVG file can be viewed in any browser.
+
+Status: WIP
+
 ### plenary.popup
 
 `popup_*` clone of Vim's commands. If it gets good enough, will submit PR to Neovim and write C wrappers

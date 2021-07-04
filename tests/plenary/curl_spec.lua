@@ -151,6 +151,22 @@ describe('CURL Wrapper:', function()
       eq(json, vim.fn.json_decode(res).json)
     end)
 
+
+    it("should not include the body twice", function ()
+      local json = { title = "New", name = "YORK" }
+      local body = vim.fn.json_encode(json)
+      local res = curl.post("https://postman-echo.com/post", {
+        body = body,
+        headers = {
+          content_type = "application/json"
+        },
+        dry_run = true,
+      })
+      local joined_response = table.concat(res, " ")
+      local first_index = joined_response:find(body)
+
+      eq(nil, joined_response:find(body, first_index + 1))
+    end)
   end)
   describe("PUT", function() --------------------------------------------------
 

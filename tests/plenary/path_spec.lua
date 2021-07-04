@@ -154,6 +154,20 @@ describe('Path', function()
       local relative = Path:new(p.filename):make_relative(p.filename)
       assert.are.same(relative, ".")
     end)
+
+    it('should not truncate if path separator is not present after cwd', function()
+      local cwd = "tmp" .. path.sep .. "foo"
+      local p = Path:new { 'tmp', 'foo_bar', 'fileb.lua'}
+      local relative = Path:new(p.filename):make_relative(cwd)
+      assert.are.same(p.filename, relative)
+    end)
+
+    it('should not truncate if path separator is not present after cwd and cwd ends in path sep', function()
+      local cwd = "tmp" .. path.sep .. "foo" .. path.sep
+      local p = Path:new { 'tmp', 'foo_bar', 'fileb.lua'}
+      local relative = Path:new(p.filename):make_relative(cwd)
+      assert.are.same(p.filename, relative)
+    end)
   end)
 
   describe(':normalize', function()

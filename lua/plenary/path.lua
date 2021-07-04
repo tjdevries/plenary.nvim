@@ -277,17 +277,15 @@ end
 function Path:make_relative(cwd)
   self.filename = clean(self.filename)
   cwd = clean(F.if_nil(cwd, self._cwd, cwd))
+  if self.filename == cwd then
+    self.filename = "."
+  else
+    if cwd:sub(#cwd, #cwd) ~= path.sep then
+      cwd = cwd .. path.sep
+    end
 
-  if self.filename:sub(1, #cwd) == cwd then
-    if #self.filename == #cwd then
-      self.filename = "."
-    else
-      -- skip path separator, unless cwd is root
-      local offset = 2
-      if cwd:sub(-1) == path.sep then
-        offset = 1
-      end
-      self.filename = self.filename:sub(#cwd + offset, -1)
+    if self.filename:sub(1, #cwd) == cwd then
+      self.filename = self.filename:sub(#cwd + 1, -1)
     end
   end
 

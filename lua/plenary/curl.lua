@@ -154,7 +154,7 @@ parse.request = function(opts)
     elseif P.is_file(P.new(b)) then
       opts.in_file = b
     elseif type(b) == "string" then
-      opts.raw = b
+      opts.raw_body = b
     end
   end
   return vim.tbl_flatten({
@@ -163,7 +163,7 @@ parse.request = function(opts)
     parse.method(opts.method),
     parse.headers(opts.headers),
     parse.accept_header(opts.accept),
-    parse.raw_body(opts.raw),
+    parse.raw_body(opts.raw_body),
     parse.data_body(opts.data),
     parse.form(opts.form),
     parse.file(opts.in_file),

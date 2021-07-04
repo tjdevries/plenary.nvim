@@ -75,7 +75,9 @@ function harness.test_directory(directory, opts)
         string.format('lua require("plenary.busted").run("%s")', p:absolute())
       }
 
-      if opts.minimal_init ~= nil then
+      if opts.minimal ~= nil then
+        table.insert(args, '--noplugin')
+      elseif opts.minimal_init ~= nil then
         table.insert(args, '--noplugin')
 
         table.insert(args, '-u')
