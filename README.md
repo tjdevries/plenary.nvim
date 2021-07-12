@@ -100,9 +100,13 @@ nvim --headless -c "PlenaryBustedDirectory tests/plenary/ {minimal_init = 'tests
 ```
 
 Where the first argument is the directory you'd like to test. It will search for files with
-the pattern `*_spec.lua` and execute them in parallel in separate neovim instances.
+the pattern `*_spec.lua` and execute them in separate neovim instances.
 
-The second argument is an optional init.vim to specify so that you can make reproducible tests!
+The second argument is a Lua option table with the following fields:
+- `minimal_init`: specify an init.vim to use for this instance, uses `--noplugin`
+- `minimal`: uses `--noplugin` without an init script (overrides `minimal_init`)
+- `sequential`: whether to run tests sequentially (default is to run in parallel)
+- `sequential_quit`: if `sequential`, whether to quit (with exit code 1) immediately on test failure
 
 The exit code is 0 when success and 1 when fail, so you can use it easily in a `Makefile`!
 
