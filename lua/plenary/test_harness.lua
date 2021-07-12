@@ -61,11 +61,10 @@ function harness.test_directory(directory, opts)
   local outputter = headless and print_output or nvim_output
 
   local paths = harness._find_files_to_run(directory)
-  for _, p in ipairs(paths) do
-    outputter(res.bufnr, "Scheduling: " .. p.filename)
-  end
 
   local path_len = #paths
+
+  local failure = false
 
   local jobs = vim.tbl_map(
     function(p)
@@ -84,7 +83,7 @@ function harness.test_directory(directory, opts)
         table.insert(args, opts.minimal_init)
       end
 
-      return Job:new {
+      local job = Job:new {
         command = vim.v.progpath,
         args = args,
 
@@ -110,14 +109,25 @@ function harness.test_directory(directory, opts)
           vim.cmd('mode')
         end)
       }
+      job.nvim_busted_path = p.filename
+      return job
     end,
     paths
   )
 
   log.debug("Running...")
   for i, j in ipairs(jobs) do
+    outputter(res.bufnr, "Scheduling: " .. j.nvim_busted_path)
     j:start()
-    log.debug("... Completed job number", i)
+    if opts.sequential then
+      log.debug("... Sequential wait for job number", i)
+      Job.join(j,50000)
+      log.debug("... Completed job number", i)
+      if j.code ~= 0 then
+        failure = true
+        if opts.sequential_quit then break end
+      end
+    end
   end
 
   -- TODO: Probably want to let people know when we've completed everything.
@@ -125,15 +135,18 @@ function harness.test_directory(directory, opts)
     return
   end
 
-  table.insert(jobs, 50000)
-  log.debug("...Waiting")
-  Job.join(unpack(jobs))
-  table.remove(jobs, table.getn(jobs))
+  if not opts.sequential then
+    table.insert(jobs, 50000)
+    log.debug("... Parallel wait")
+    Job.join(unpack(jobs))
+    log.debug("... Completed jobs")
+    table.remove(jobs, table.getn(jobs))
+    failure = f.any(function(_, v) return v.code ~= 0 end, jobs)
+  end
   vim.wait(100)
-  log.debug("Done...")
 
   if headless then
-    if f.any(function(_, v) return v.code ~= 0 end, jobs) then
+    if failure then
       os.exit(1)
     end
 
