@@ -101,8 +101,11 @@ function Border:change_title(new_title)
   vim.api.nvim_buf_set_lines(self.bufnr, 0, -1, false, self.contents)
 end
 
-function Border:new(content_bufnr, content_win_id, content_win_options, border_win_options)
-  assert(type(content_win_id) == 'number', "Must supply a valid win_id. It's possible you forgot to call with ':'")
+-- Sets the size and position of the given Border.
+-- Can be used to create a new window (with `create_window = true`)
+-- or change an existing one
+function Border:set_size(content_win_options, border_win_options, create_window)
+  create_window = (create_window ~= nil) and create_window or false
 
   -- TODO: Probably can use just deep_extend, now that it's available
   border_win_options = tbl.apply_defaults(border_win_options, {
@@ -119,23 +122,11 @@ function Border:new(content_bufnr, content_win_id, content_win_options, border_w
     bot      = '═',
   })
 
-  local obj = {}
-
-  obj.content_win_id = content_win_id
-  obj.content_win_options = content_win_options
-  obj._border_win_options = border_win_options
-
-
-  obj.bufnr = vim.api.nvim_create_buf(false, true)
-  assert(obj.bufnr, "Failed to create border buffer")
-  vim.api.nvim_buf_set_option(obj.bufnr, "bufhidden", "wipe")
-
-  obj.contents = Border._create_lines(content_win_options, border_win_options)
-  vim.api.nvim_buf_set_lines(obj.bufnr, 0, -1, false, obj.contents)
+  self.contents = Border._create_lines(content_win_options, border_win_options)
+  vim.api.nvim_buf_set_lines(self.bufnr, 0, -1, false, self.contents)
 
   local thickness = border_win_options.border_thickness
-
-  obj.win_id = vim.api.nvim_open_win(obj.bufnr, false, {
+  local nvim_win_config = {
     anchor = content_win_options.anchor,
     relative = content_win_options.relative,
     style = "minimal",
@@ -143,7 +134,29 @@ function Border:new(content_bufnr, content_win_id, content_win_options, border_w
     col = content_win_options.col - thickness.left,
     width = content_win_options.width + thickness.left + thickness.right,
     height = content_win_options.height + thickness.top + thickness.bot,
-  })
+  }
+  if create_window then
+    self.win_id = vim.api.nvim_open_win(self.bufnr, false, nvim_win_config)
+  else
+    vim.api.nvim_win_set_config(self.win_id, nvim_win_config)
+  end
+end
+
+function Border:new(content_bufnr, content_win_id, content_win_options, border_win_options)
+  assert(type(content_win_id) == 'number', "Must supply a valid win_id. It's possible you forgot to call with ':'")
+
+  local obj = {}
+
+  obj.content_win_id = content_win_id
+  obj.content_win_options = content_win_options
+  obj._border_win_options = border_win_options
+
+  obj.bufnr = vim.api.nvim_create_buf(false, true)
+  assert(obj.bufnr, "Failed to create border buffer")
+  vim.api.nvim_buf_set_option(obj.bufnr, "bufhidden", "wipe")
+
+  -- Create a border window and buffer, with border characters around the edge
+  Border.set_size(obj, content_win_options, border_win_options, true)
 
   vim.cmd(string.format(
     "autocmd BufDelete <buffer=%s> ++nested ++once :lua require('plenary.window').close_related_win(%s, %s)",
