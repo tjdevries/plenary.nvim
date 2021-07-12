@@ -6,39 +6,56 @@ local uv = vim.loop
 
 local m = {}
 
-local get_gitignore = function(basepath)
-  local gitignore = {}
+local make_gitignore = function(basepath)
+  local patterns = {}
   local valid = false
   for _, v in ipairs(basepath) do
     local p = Path:new(v .. os_sep .. '.gitignore')
     if p:exists() then
       valid = true
-      gitignore[v] = {}
+      patterns[v] = {ignored = {}, negated = {}}
       for l in p:iter() do
-        if l ~= '' then
-          local el = l:gsub('%#.*', '')
+        local prefix = l:sub(1, 1)
+        local negated = prefix == '!'
+        if negated then
+            l = l:sub(2)
+            prefix = l:sub(1, 1)
+        end
+        if prefix == '/' then
+            l = v .. l
+        end
+        if not (prefix == '' or prefix == '#') then
+          local el = vim.trim(l)
+          el = el:gsub('%-', '%%-')
           el = el:gsub('%.', '%%.')
-          el = el:gsub('%*', '%.%*')
+          el = el:gsub('/%*%*/', '/%%w+/')
+          el = el:gsub('%*%*', '')
+          el = el:gsub('%*', '%%w+')
+          el = el:gsub('%?', '%%w')
           if el ~= '' then
-            table.insert(gitignore[v], el)
+            table.insert(negated and patterns[v].negated or patterns[v].ignored, el)
           end
         end
       end
     end
   end
   if not valid then return nil end
-  return gitignore
-end
-
-local interpret_gitignore = function(gitignore, bp, entry)
-  for _, v in ipairs(bp) do
-    if entry:find(v, 1, true) then
-      for _, w in ipairs(gitignore[v]) do
-        if entry:match(w) then return false end
+  return function(bp, entry)
+    for _, v in ipairs(bp) do
+      if entry:find(v, 1, true) then
+        local negated = false
+        for _, w in ipairs(patterns[v].ignored) do
+          if not negated and entry:match(w) then
+            for _, inverse in ipairs(patterns[v].negated) do
+              if not negated and entry:match(inverse) then negated = true end
+            end
+            if not negated then return false end
+          end
+        end
       end
     end
+    return true
   end
-  return true
 end
 
 local handle_depth = function(base_paths, entry, depth)
@@ -67,6 +84,8 @@ local gen_search_pat = function(pattern)
       end
       return false
     end
+  elseif type(pattern) == 'function' then
+     return pattern
   end
 end
 
@@ -79,17 +98,17 @@ local process_item = function(opts, name, typ, current_dir, next_dir, bp, data, 
       else
         table.insert(next_dir, entry)
       end
-      if opts.add_dirs then
-        if not giti or interpret_gitignore(giti, bp, entry .. "/") then
+      if opts.add_dirs or opts.only_dirs then
+        if not giti or giti(bp, entry .. "/") then
           if not msp or msp(entry) then
             table.insert(data, entry)
             if opts.on_insert then opts.on_insert(entry, typ) end
           end
         end
       end
-    else
+    elseif not opts.only_dirs then
       local entry = current_dir .. os_sep .. name
-      if not giti or interpret_gitignore(giti, bp, entry) then
+      if not giti or giti(bp, entry) then
         if not msp or msp(entry) then
           table.insert(data, entry)
           if opts.on_insert then opts.on_insert(entry, typ) end
@@ -107,9 +126,10 @@ end
 -- @param opts: table to change behavior
 --   opts.hidden (bool):              if true hidden files will be added
 --   opts.add_dirs (bool):            if true dirs will also be added to the results
+--   opts.only_dirs (bool):           if true only dirs will be added to the results
 --   opts.respect_gitignore (bool):   if true will only add files that are not ignored by the git (uses each gitignore found in path table)
 --   opts.depth (int):                depth on how deep the search should go
---   opts.search_pattern (regex):     regex for which files will be added, string or table of strings
+--   opts.search_pattern (regex):     regex for which files will be added, string, table of strings, or callback (should return bool)
 --   opts.on_insert(entry):           Will be called for each element
 --   opts.silent (bool):              if true will not echo messages that are not accessible
 -- @return array with files
@@ -120,8 +140,8 @@ m.scan_dir = function(path, opts)
   local base_paths = vim.tbl_flatten { path }
   local next_dir = vim.tbl_flatten { path }
 
-  local gitignore = opts.respect_gitignore and get_gitignore(base_paths) or nil
-  local match_seach_pat = opts.search_pattern and gen_search_pat(opts.search_pattern) or nil
+  local gitignore = opts.respect_gitignore and make_gitignore(base_paths) or nil
+  local match_search_pat = opts.search_pattern and gen_search_pat(opts.search_pattern) or nil
 
   for i = table.getn(base_paths), 1, -1 do
     if uv.fs_access(base_paths[i], "X") == false then
@@ -140,7 +160,7 @@ m.scan_dir = function(path, opts)
       while true do
         local name, typ = uv.fs_scandir_next(fd)
         if name == nil then break end
-        process_item(opts, name, typ, current_dir, next_dir, base_paths, data, gitignore, match_seach_pat)
+        process_item(opts, name, typ, current_dir, next_dir, base_paths, data, gitignore, match_search_pat)
       end
     end
   until table.getn(next_dir) == 0
@@ -157,7 +177,7 @@ end
 --   opts.add_dirs (bool):            if true dirs will also be added to the results
 --   opts.respect_gitignore (bool):   if true will only add files that are not ignored by git
 --   opts.depth (int):                depth on how deep the search should go
---   opts.search_pattern (lua regex): depth on how deep the search should go
+--   opts.search_pattern (regex):     regex for which files will be added, string, table of strings, or callback (should return bool)
 --   opts.on_insert function(entry):  will be called for each element
 --   opts.on_exit function(results):  will be called at the end
 --   opts.silent (bool):              if true will not echo messages that are not accessible
@@ -170,8 +190,8 @@ m.scan_dir_async = function(path, opts)
   local current_dir = table.remove(next_dir, 1)
 
   -- TODO(conni2461): get gitignore is not async
-  local gitignore = opts.respect_gitignore and get_gitignore() or nil
-  local match_seach_pat = opts.search_pattern and gen_search_pat(opts.search_pattern) or nil
+  local gitignore = opts.respect_gitignore and make_gitignore(base_paths) or nil
+  local match_search_pat = opts.search_pattern and gen_search_pat(opts.search_pattern) or nil
 
   -- TODO(conni2461): is not async. Shouldn't be that big of a problem but still
   -- Maybe obers async pr can take me out of callback hell
@@ -191,7 +211,7 @@ m.scan_dir_async = function(path, opts)
       while true do
         local name, typ = uv.fs_scandir_next(fd)
         if name == nil then break end
-        process_item(opts, name, typ, current_dir, next_dir, base_paths, data, gitignore, match_seach_pat)
+        process_item(opts, name, typ, current_dir, next_dir, base_paths, data, gitignore, match_search_pat)
       end
       if table.getn(next_dir) == 0 then
         if opts.on_exit then opts.on_exit(data) end
