@@ -34,6 +34,9 @@ return {
     ['_coffee'] = 'coffee',
     ['nix'] = 'nix',
     ['erb'] = 'eruby',
+    ['hbs'] = 'handlebars',
+    ['graphql'] = 'graphql',
+    ['gql'] = 'graphql',
   },
   file_name = {
     ['cakefile'] = 'coffee',
