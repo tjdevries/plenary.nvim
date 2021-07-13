@@ -61,11 +61,17 @@ util.kv_to_str = function(kv, sep, kvsep)
 end
 
 util.gen_dump_path = function()
+  local path
   local id = string.gsub("xxxx4xxx", "[xy]", function(l)
     local v = (l == "x") and math.random(0, 0xf) or math.random(0, 0xb)
     return string.format("%x", v)
   end)
-  local path = "/tmp/plenary_curl_" .. id .. ".headers"
+  if P.path.sep == "\\" then
+    path = string.format("%s\\AppData\\Local\\Temp\\plenary_curl_%s.headers",
+      os.getenv("USERPROFILE"), id)
+  else
+    path = "/tmp/plenary_curl_" .. id .. ".headers"
+  end
   return {"-D", path}
 end
 
