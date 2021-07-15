@@ -119,7 +119,7 @@ log.new = function(config, standalone)
 
         local split_console = vim.split(console_string, "\n")
         for _, v in ipairs(split_console) do
-          local formatted_msg = string.format("[%s] %s", config.plugin, vim.fn.escape(v, '"'))
+          local formatted_msg = string.format("[%s] %s", config.plugin, vim.fn.escape(v, [["\]]))
 
           local ok = pcall(vim.cmd, string.format([[echom "%s"]], formatted_msg))
           if not ok then
