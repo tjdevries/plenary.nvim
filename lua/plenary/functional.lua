@@ -68,4 +68,26 @@ function f.last(...)
   return x
 end
 
+function f.curry(f)
+  return function(x)
+    return f(x)
+  end
+end
+
+function f.curry2(f)
+  return function(x)
+    return function(y)
+      return f(x, y)
+    end
+  end
+end
+
+function f.pipe(x, ...)
+  if ... ~= nil then
+    return f.pipe(f.first(...)(x), select(2, ...))
+  else
+    return x
+  end
+end
+
 return f
