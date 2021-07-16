@@ -33,7 +33,6 @@ end
 
 ---Implement a mixin onto this Object.
 ---@param self Object
----@param nil ...
 function Object:implement(...)
   for _, cls in pairs({...}) do
     for k, v in pairs(cls) do

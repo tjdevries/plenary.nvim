@@ -8,9 +8,8 @@
 local co = coroutine
 local f = require('plenary.functional')
 
---------------------------------------------------------------------------------
+
 -- Tools
---------------------------------------------------------------------------------
 
 local exports = {}
 
@@ -66,9 +65,9 @@ local call_if_not_empty = function(fun, state_x, ...)
   return state_x, fun(...)
 end
 
---------------------------------------------------------------------------------
+
 -- Basic Functions
---------------------------------------------------------------------------------
+
 local nil_gen = function(_param, _state)
   return nil
 end
@@ -195,9 +194,9 @@ end
 --   return wrap(stateful_gen, false, false)
 -- end
 
---------------------------------------------------------------------------------
+
 -- Generators
---------------------------------------------------------------------------------
+
 local range_gen = function(param, state)
   local stop, step = param[1], param[2]
   state = state + step
@@ -368,9 +367,8 @@ local lines = function(input)
 end
 exports.lines = lines
 
---------------------------------------------------------------------------------
 -- Transformations
---------------------------------------------------------------------------------
+
 local map_gen = function(param, state)
   local gen_x, param_x, fun = param[1], param[2], param[3]
   return call_if_not_empty(fun, gen_x(param_x, state))
@@ -421,9 +419,9 @@ function Iterator:flatten()
   return wrap(flatten_gen, false, {self.gen, self.param, self.state})
 end
 
---------------------------------------------------------------------------------
+
 -- Filtering
---------------------------------------------------------------------------------
+
 local filter1_gen = function(fun, gen_x, param_x, state_x, a)
   while true do
     if state_x == nil or fun(a) then break; end
@@ -472,9 +470,9 @@ function Iterator:filter(fun)
   return wrap(filter_gen, {self.gen, self.param, fun}, self.state)
 end
 
---------------------------------------------------------------------------------
+
 -- Reducing
---------------------------------------------------------------------------------
+
 
 ---Returns true if any of the values in the iterator satisfy a predicate
 ---@param fun function
@@ -551,9 +549,9 @@ function Iterator:tomap()
   return map
 end
 
---------------------------------------------------------------------------------
+
 -- Compositions
---------------------------------------------------------------------------------
+
 -- call each other
 local chain_gen_r1
 local chain_gen_r2 = function(param, state, state_x, ...)
